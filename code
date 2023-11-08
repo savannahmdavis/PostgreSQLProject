@@ -75,7 +75,7 @@ AFTER INSERT ON detailed
 FOR EACH ROW
 	EXECUTE PROCEDURE update_summary();
 
--- Creates procedure to update detailed table, which in turn updates summary table based on previous trigger function
+-- Creates stored procedure to update detailed table, which in turn updates summary table based on previous trigger function
 CREATE PROCEDURE refresh_tables()
 	LANGUAGE plpgsql
 AS $$
