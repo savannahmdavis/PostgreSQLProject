@@ -1,17 +1,17 @@
 -- user-defined function to change TIMESTAMP format to 'MM-DD-YYYY' for clarity
 CREATE FUNCTION modify_timestamp(input_date TIMESTAMP)
-  RETURNS VARCHAR
-  LANGUAGE PLPGSQL
+  	RETURNS VARCHAR
+  	LANGUAGE PLPGSQL
 AS $$
 DECLARE
-  modified_date DATE;
+  	modified_date DATE;
 BEGIN
-  modified_date = input_date::DATE;
-  RETURN TO_CHAR(modified_date, 'MM-DD-YYYY');
+	modified_date = input_date::DATE;
+  	RETURN TO_CHAR(modified_date, 'MM-DD-YYYY');
 END; $$
 
--- Creates detailed table with all applicable variables
-CREATE TABLE detailed (
+-- Creates a comprehensive table with all applicable variables
+CREATE TABLE comp_t (
 detail_id SERIAL, 
 payment_id INT, 
 film_id INT,
@@ -22,15 +22,15 @@ sales_date VARCHAR(10),
 PRIMARY KEY (detail_id)
 );
 
--- Creates summary table with aggregated function to answer business question
-CREATE TABLE summary (
+-- Creates a summary table with aggregated function to answer business question
+CREATE TABLE analysis_t (
 film_genre VARCHAR(20), 
 num_sales INT NOT NULL,
 PRIMARY KEY (film_genre)
 );
 
--- Inserts existing data from database into detailed table
-INSERT INTO detailed (payment_id, film_id, movie_title, category_id, film_genre, sales_date)
+-- Inserts existing data from database into comprehensive table
+INSERT INTO comp_t (payment_id, film_id, movie_title, category_id, film_genre, sales_date)
 SELECT payment.payment_id, film.film_id, film.title, category.category_id, category.name, 
 modify_timestamp(payment.payment_date)
 FROM category
@@ -43,57 +43,56 @@ WHERE inventory.store_id = ‘1’
 ORDER BY category.category_id, payment.payment_date DESC;
 
 -- Creates trigger function to populate summary table based on detailed table
-CREATE FUNCTION update_summary()
+CREATE FUNCTION update_analysis_t()
 	RETURNS TRIGGER
 	LANGUAGE PLPGSQL
 AS $$
 BEGIN
-	UPDATE summary
-  SET num_sales = (SELECT COUNT(payment_id) FROM detailed WHERE film_genre = NEW.film_genre)
-  WHERE film_genre = NEW.film_genre;
+	UPDATE analysis_t
+ 	SET num_sales = (SELECT COUNT(payment_id) FROM comp_t WHERE film_genre = NEW.film_genre)
+  	WHERE film_genre = NEW.film_genre;
 
-  IF NOT FOUND THEN
-	  INSERT INTO summary (film_genre, num_sales)
-  VALUES (NEW.film_genre, (SELECT COUNT(payment_id) FROM detailed WHERE film_genre = NEW.film_genre));
-	  END IF;
+  	IF NOT FOUND THEN
+	INSERT INTO analysis_t (film_genre, num_sales)
+  	VALUES (NEW.film_genre, (SELECT COUNT(payment_id) FROM comp_t WHERE film_genre = NEW.film_genre));
+	END IF;
 
-  DELETE FROM summary
-  WHERE film_genre NOT IN (
+  	DELETE FROM analysis_t
+ 	WHERE film_genre NOT IN (
 	  SELECT film_genre
-	  FROM summary
+	  FROM analysis_t
 	  ORDER BY num_sales DESC
 	  LIMIT 5
-  );
+  	);
 
-  RETURN NEW;
-END;
-$$
+  	RETURN NEW;
+END; $$
 
 -- Creates trigger based on previous trigger function
-CREATE TRIGGER update_summary_trigger
-AFTER INSERT ON detailed
+CREATE TRIGGER update_analysis_t_trigger
+AFTER INSERT ON comp_t
 FOR EACH ROW
-	EXECUTE PROCEDURE update_summary();
+	EXECUTE PROCEDURE update_analysis_t();
 
--- Creates stored procedure to update detailed table, which in turn updates summary table based on previous trigger function
+-- Creates stored procedure to update comprehensive table, which in turn updates analysis table based on previous trigger function
 CREATE PROCEDURE refresh_tables()
 	LANGUAGE plpgsql
 AS $$
 BEGIN
-	DELETE FROM detailed;
-	DELETE FROM summary;
+	DELETE FROM comp_t;
+	DELETE FROM analysis_t;
 
-  INSERT INTO detailed (payment_id, film_id, movie_title, category_id, film_genre, sales_date)
-  SELECT payment.payment_id, film.film_id, film.title, category.category_id, category.name, modify_timestamp(payment.payment_date)
-  FROM category
-  JOIN film_category ON category.category_id = film_category.category_id
-  JOIN film ON film_category.film_id = film.film_id
-  JOIN inventory ON film.film_id = inventory.film_id
-  JOIN rental ON inventory.inventory_id = rental.inventory_id
-  JOIN payment ON rental.rental_id = payment.rental_id
-  WHERE inventory.store_id = ‘1’
-  ORDER BY category.category_id, payment.payment_date DESC;
+  	INSERT INTO comp_t (payment_id, film_id, movie_title, category_id, film_genre, sales_date)
+  	SELECT payment.payment_id, film.film_id, film.title, category.category_id, category.name, modify_timestamp(payment.payment_date)
+  	FROM category
+  	JOIN film_category ON category.category_id = film_category.category_id
+  	JOIN film ON film_category.film_id = film.film_id
+ 	JOIN inventory ON film.film_id = inventory.film_id
+  	JOIN rental ON inventory.inventory_id = rental.inventory_id
+  	JOIN payment ON rental.rental_id = payment.rental_id
+  	WHERE inventory.store_id = ‘1’
+  	ORDER BY category.category_id, payment.payment_date DESC;
 
-  COMMIT;
+ 	COMMIT;
 END; $$
 
